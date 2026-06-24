@@ -15,7 +15,7 @@ device.name2=munchin
 device.name3=
 device.name4=
 device.name5=
-supported.versions=12-14
+supported.versions=
 '; } # end properties
 
 block=/dev/block/bootdevice/by-name/boot;
