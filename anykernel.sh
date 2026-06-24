@@ -30,12 +30,12 @@ ui_print "  PitchKernel by Mujinn";
 ui_print " ";
 
 ## ROM detection — auto from zip filename, volume-key fallback
-## Uses $AKHOME (correct variable in this ak3-core.sh), not $home
 case "$ZIPFILE" in
   *miui*|*MIUI*|*hyper*|*HyperOS*)
     ui_print "┌─────────────────────────────────┐";
     ui_print "│    MIUI/HyperOS ROM Detected    │";
     ui_print "└─────────────────────────────────┘";
+    os="miui";
     mv "$AKHOME"/munch-miui-dtbo.img "$AKHOME"/dtbo.img 2>/dev/null;
     rm -f "$AKHOME"/munch-aosp-dtbo.img 2>/dev/null;
     ;;
@@ -59,6 +59,7 @@ case "$ZIPFILE" in
         ui_print "┌─────────────────────────────────┐";
         ui_print "│      MIUI/HyperOS Selected      │";
         ui_print "└─────────────────────────────────┘";
+        os="miui";
         mv "$AKHOME"/munch-miui-dtbo.img "$AKHOME"/dtbo.img 2>/dev/null;
         rm -f "$AKHOME"/munch-aosp-dtbo.img 2>/dev/null;
         ;;
@@ -66,6 +67,7 @@ case "$ZIPFILE" in
         ui_print "┌─────────────────────────────────┐";
         ui_print "│        AOSP ROM Detected        │";
         ui_print "└─────────────────────────────────┘";
+        os="aosp";
         mv "$AKHOME"/munch-aosp-dtbo.img "$AKHOME"/dtbo.img 2>/dev/null;
         rm -f "$AKHOME"/munch-miui-dtbo.img 2>/dev/null;
         ;;
@@ -74,16 +76,28 @@ case "$ZIPFILE" in
 esac;
 ui_print " ";
 
-## CPU frequency note
-## qcom_cpufreq_hw_read_lut skips Index[20] Frequency[3187200] on this
-## kernel — confirmed from real dmesg. Hardware ceiling is 2841600 kHz.
-## No sysfs write needed — the driver enforces the real ceiling at boot.
+## BUG FIX: Move kernel Image and dtb from kernels/$os/ to $AKHOME/ root.
+## ak3-core.sh write_boot() searches for Image at $AKHOME/ root (line 264).
+## Without this mv, write_boot falls through to split_img/kernel (the OLD kernel
+## from the current boot partition) and reflashes the old kernel — not PitchKernel.
+if [ -f "$AKHOME/kernels/$os/Image" ]; then
+  mv "$AKHOME/kernels/$os/Image" "$AKHOME/Image";
+  mv "$AKHOME/kernels/$os/dtb"   "$AKHOME/dtb"   2>/dev/null;
+  ui_print "  kernel: $os Image loaded";
+else
+  ui_print "  ERROR: No kernel Image found for $os in this zip!";
+  exit 1;
+fi;
+ui_print " ";
+
+## CPU note — hardware ceiling confirmed from real dmesg:
+## qcom_cpufreq_hw_read_lut skips Index[20] Frequency[3187200].
+## Real prime core ceiling = 2841600 kHz. No sysfs write needed at flash time.
 ui_print "  CPU: prime core ceiling 2841600 kHz (hardware-enforced)";
 ui_print " ";
 
-## Install cpufreq script to post-fs-data.d — no separate module needed.
-## KSU/Magisk (already installed via ReSukiSU) polls /data/adb/post-fs-data.d/
-## on every boot automatically. The script runs as root and logs via logcat.
+## Install cpufreq script to post-fs-data.d.
+## KSU/Magisk runs this on every boot automatically as root.
 mkdir -p /data/adb/post-fs-data.d 2>/dev/null;
 cp "$AKHOME"/patch/pitchkernel_cpufreq.sh /data/adb/post-fs-data.d/pitchkernel_cpufreq.sh 2>/dev/null;
 chmod 755 /data/adb/post-fs-data.d/pitchkernel_cpufreq.sh 2>/dev/null;
@@ -95,16 +109,12 @@ else
 fi;
 ui_print " ";
 
-## Boot flash — dump_boot then write_boot, matching Perf+ exactly.
-## No ramdisk modification. Boot header v3 ramdisk patching
-## (unpack_ramdisk/repack_ramdisk) caused bootloop into fastboot —
-## confirmed from recovery.log showing both partitions growing in size.
+## Boot flash
 ui_print "  -> installing BOOT";
 dump_boot;
 write_boot;
 
-## vendor_boot — same as Perf+: reset_ak, dump_boot, write_boot.
-## No ramdisk patching here either.
+## vendor_boot — reset_ak, dump_boot, write_boot (same as Perf+)
 ui_print "  -> installing VENDOR_BOOT";
 block=/dev/block/bootdevice/by-name/vendor_boot;
 is_slot_device=1;
@@ -118,3 +128,4 @@ write_boot;
 ui_print " ";
 ui_print "  PitchKernel installed successfully!";
 ## end install
+
