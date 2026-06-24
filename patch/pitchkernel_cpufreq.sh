@@ -3,9 +3,11 @@
 # Installed to /data/adb/post-fs-data.d/ by anykernel.sh at flash time.
 # KSU/Magisk runs this automatically on every boot as root.
 #
-# Prime core (cpu7) real ceiling = 3187200 kHz (confirmed via FKM live read).
-# The dmesg LUT-skip line was a red herring — hardware IS capable of 3187 MHz.
-# We do NOT cap scaling_max_freq — let the hardware and schedutil decide freely.
+# Prime core (cpu7) ceiling: the qcom-cpufreq-hw driver reads the OPP LUT from
+# hardware and skips Index[20] Frequency[3187200] (confirmed in dmesg at boot).
+# The real driver-enforced ceiling is 2841600 kHz. We do NOT write scaling_max_freq
+# — the driver already handles this. Writing it would be redundant at best and
+# could fight governor decisions at worst.
 #
 # Gaming fix: reduce schedutil rate_limit_us for faster frequency response.
 # Default = 500us — lags before responding to load burst, causes frame drops.
