@@ -77,7 +77,7 @@ esac;
 ui_print " ";
 
 ## BUG FIX: Move kernel Image and dtb from kernels/$os/ to $AKHOME/ root.
-## The AK3 core script's write_boot() searches for Image at $AKHOME/ root (line 264).
+## ak3-core.sh write_boot() searches for Image at $AKHOME/ root (line 264).
 ## Without this mv, write_boot falls through to split_img/kernel (the OLD kernel
 ## from the current boot partition) and reflashes the old kernel — not PitchKernel.
 if [ -f "$AKHOME/kernels/$os/Image" ]; then
@@ -90,10 +90,11 @@ else
 fi;
 ui_print " ";
 
-## CPU note — hardware ceiling confirmed from real dmesg:
-## qcom_cpufreq_hw_read_lut skips Index[20] Frequency[3187200].
-## Real prime core ceiling = 2841600 kHz. No sysfs write needed at flash time.
-ui_print "  CPU: prime core ceiling 2841600 kHz (hardware-enforced)";
+## CPU note: SM8250 prime core (cpu7) has OPP states up to 3187200 kHz, including
+## the stock ceiling 2841600 kHz plus a higher overclock-style step at 3187200 kHz.
+## Confirmed via on-device time_in_state: cpu7 genuinely runs at 3187200 kHz under
+## real load (this is working as designed, not a bug). No sysfs write is made here.
+ui_print "  CPU: prime core OPP table includes up to 3187200 kHz";
 ui_print " ";
 
 ## Install cpufreq script to post-fs-data.d.
@@ -128,4 +129,5 @@ write_boot;
 ui_print " ";
 ui_print "  PitchKernel installed successfully!";
 ## end install
+
 
