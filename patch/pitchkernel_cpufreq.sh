@@ -3,17 +3,39 @@
 # Installed to /data/adb/post-fs-data.d/ by anykernel.sh at flash time.
 # KSU/Magisk runs this automatically on every boot as root.
 #
-# Prime core (cpu7) ceiling: the qcom-cpufreq-hw driver reads the OPP LUT from
-# hardware and skips Index[20] Frequency[3187200] (confirmed in dmesg at boot).
-# The real driver-enforced ceiling is 2841600 kHz. We do NOT write scaling_max_freq
-# — the driver already handles this. Writing it would be redundant at best and
-# could fight governor decisions at worst.
+# CPU FREQUENCY NOTE:
+# FKM and other tools show "Prime cluster max freq: 3187 MHz" — this is correct.
+# cpuinfo_max_freq = what the SM8250 hardware OPP table reports as capable.
+# With uclamp disabled, schedutil will NOT boost to 3187 MHz for normal tasks.
+# The 3187 MHz entry is there in hardware but the governor won't reach it without
+# an explicit uclamp boost request from a task. This is the intended behaviour.
+#
+# I/O SCHEDULER FIX:
+# Android's init.qcom.rc resets the block device scheduler to cfq at boot.
+# This script re-enforces mq-deadline on every boot AFTER init.rc runs,
+# since post-fs-data.d runs after early init but has root access to sysfs.
 #
 # Gaming fix: reduce schedutil rate_limit_us for faster frequency response.
 # Default = 500us — lags before responding to load burst, causes frame drops.
 # 200us = faster response without burning power on idle.
 
-# Schedutil rate_limit_us — faster CPU freq response for gaming (HSR, CoD, Genshin)
+# --- I/O Scheduler enforcement ---
+# UFS on SM8250 appears as /dev/sda or /dev/sdf depending on firmware.
+# Try all common block device names. mq-deadline is correct for UFS 3.1 NVMe-like queue.
+for blkdev in sda sdb sdc sdd sde sdf; do
+  SCHED_PATH="/sys/block/${blkdev}/queue/scheduler"
+  if [ -f "$SCHED_PATH" ]; then
+    # Only change if mq-deadline is available (kernel compiled with CONFIG_MQ_IOSCHED_DEADLINE)
+    if grep -q "mq-deadline" "$SCHED_PATH" 2>/dev/null; then
+      echo "mq-deadline" > "$SCHED_PATH" 2>/dev/null
+      log -p i -t PitchKernel "iosched: set mq-deadline on /dev/${blkdev} (was: $(cat $SCHED_PATH 2>/dev/null))"
+    else
+      log -p w -t PitchKernel "iosched: mq-deadline not available on /dev/${blkdev}, available: $(cat $SCHED_PATH 2>/dev/null)"
+    fi
+  fi
+done
+
+# --- Schedutil rate_limit_us — faster CPU freq response for gaming ---
 for cpu in 0 1 2 3 4 5 6 7; do
   RATE_PATH="/sys/devices/system/cpu/cpu${cpu}/cpufreq/schedutil/rate_limit_us"
   if [ -f "$RATE_PATH" ]; then
@@ -21,8 +43,7 @@ for cpu in 0 1 2 3 4 5 6 7; do
   fi
 done
 
-# hispeed_freq per cluster — minimum freq to jump to on load burst
-# Prevents under-clocking during sudden game load spikes
+# --- hispeed_freq per cluster — minimum freq to jump to on load burst ---
 for cpu in 0 4 7; do
   HISPEED_PATH="/sys/devices/system/cpu/cpu${cpu}/cpufreq/schedutil/hispeed_freq"
   if [ -f "$HISPEED_PATH" ]; then
@@ -34,5 +55,4 @@ for cpu in 0 4 7; do
   fi
 done
 
-log -p i -t PitchKernel "schedutil tuning applied (rate_limit_us=200, hispeed set per cluster)"
-
+log -p i -t PitchKernel "tuning applied: mq-deadline enforced, schedutil rate_limit_us=200, hispeed set per cluster"
