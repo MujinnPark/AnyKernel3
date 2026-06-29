@@ -77,7 +77,7 @@ esac;
 ui_print " ";
 
 ## BUG FIX: Move kernel Image and dtb from kernels/$os/ to $AKHOME/ root.
-## ak3-core.sh write_boot() searches for Image at $AKHOME/ root (line 264).
+## The AK3 core script's write_boot() searches for Image at $AKHOME/ root (line 264).
 ## Without this mv, write_boot falls through to split_img/kernel (the OLD kernel
 ## from the current boot partition) and reflashes the old kernel — not PitchKernel.
 if [ -f "$AKHOME/kernels/$os/Image" ]; then
