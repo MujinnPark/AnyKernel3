@@ -25,6 +25,19 @@ ramdisk_compression=auto;
 ## AnyKernel methods
 . tools/ak3-core.sh;
 
+# GUARD: ak3-core.sh in MujinnPark/AnyKernel3 was historically truncated at 563/966 lines,
+# which left write_boot(), reset_ak(), and SLOT undefined — causing a cryptic
+# "Unable to determine partition. Aborting..." failure at flash time.
+# This check produces a clear error message instead of a silent abort if the
+# fork ever regresses to the truncated state again.
+if ! type write_boot > /dev/null 2>&1; then
+  ui_print " ";
+  ui_print "  FATAL: write_boot is not defined.";
+  ui_print "  ak3-core.sh is truncated (missing write_boot, reset_ak, SLOT).";
+  ui_print "  Rebuild the zip — see MujinnPark/AnyKernel3 tools/ak3-core.sh";
+  exit 1;
+fi;
+
 ui_print " ";
 ui_print "  PitchKernel by Mujinn";
 ui_print " ";
@@ -77,7 +90,7 @@ esac;
 ui_print " ";
 
 ## BUG FIX: Move kernel Image and dtb from kernels/$os/ to $AKHOME/ root.
-## ak3-core.sh write_boot() searches for Image at $AKHOME/ root (line 264).
+## ak3-core.sh write_boot() searches for Image at $AKHOME/ root.
 ## Without this mv, write_boot falls through to split_img/kernel (the OLD kernel
 ## from the current boot partition) and reflashes the old kernel — not PitchKernel.
 if [ -f "$AKHOME/kernels/$os/Image" ]; then
@@ -90,15 +103,11 @@ else
 fi;
 ui_print " ";
 
-## CPU note: SM8250 prime core (cpu7) has OPP states up to 3187200 kHz, including
-## the stock ceiling 2841600 kHz plus a higher overclock-style step at 3187200 kHz.
-## Confirmed via on-device time_in_state: cpu7 genuinely runs at 3187200 kHz under
-## real load (this is working as designed, not a bug). No sysfs write is made here.
+## CPU note: SM8250 prime core (cpu7) has OPP states up to 3187200 kHz.
 ui_print "  CPU: prime core OPP table includes up to 3187200 kHz";
 ui_print " ";
 
 ## Install cpufreq script to post-fs-data.d.
-## KSU/Magisk runs this on every boot automatically as root.
 mkdir -p /data/adb/post-fs-data.d 2>/dev/null;
 cp "$AKHOME"/patch/pitchkernel_cpufreq.sh /data/adb/post-fs-data.d/pitchkernel_cpufreq.sh 2>/dev/null;
 chmod 755 /data/adb/post-fs-data.d/pitchkernel_cpufreq.sh 2>/dev/null;
@@ -115,7 +124,7 @@ ui_print "  -> installing BOOT";
 dump_boot;
 write_boot;
 
-## vendor_boot — reset_ak, dump_boot, write_boot (same as Perf+)
+## vendor_boot — reset_ak, dump_boot, write_boot
 ui_print "  -> installing VENDOR_BOOT";
 block=/dev/block/bootdevice/by-name/vendor_boot;
 is_slot_device=1;
@@ -129,5 +138,3 @@ write_boot;
 ui_print " ";
 ui_print "  PitchKernel installed successfully!";
 ## end install
-
-
